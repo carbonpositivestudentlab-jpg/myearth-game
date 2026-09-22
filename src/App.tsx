@@ -98,13 +98,10 @@ export default function App() {
   // 相手グループ選択モーダル（磯焼け等の除去用）
   const [groupSelectorConfig, setGroupSelectorConfig] = useState<TargetGroupSelectorConfig | null>(null);
 
-  // 操作用ステート（PCドラッグ ＆ モバイルタップ選択ハイブリッド）
+  // 操作用ステート
   const [draggedCard, setDraggedCard] = useState<AnyCard | null>(null);
-  const [selectedBattleCard, setSelectedBattleCard] = useState<BattleCard | null>(null);
-  const [selectedSupport, setSelectedSupport] = useState<SupportCard | null>(null);
-
-  // 横画面案内非表示フラグ
-  const [dismissRotateTip, setDismissRotateTip] = useState<boolean>(false);
+  const [selectedHandCard, setSelectedHandCard] = useState<AnyCard | null>(null);
+  const [selectedSupportForTarget, setSelectedSupportForTarget] = useState<SupportCard | null>(null);
 
   // 長押しプレビュー
   const [previewCard, setPreviewCard] = useState<AnyCard | null>(null);
@@ -181,7 +178,6 @@ export default function App() {
     }
   };
 
-  // 単一グループの墓地送り処理（みなもとは場に返却）
   const discardSingleGroup = (targetGroup: CardGroup, ownerSide: Side) => {
     const isOwnerBlue = ownerSide === 'blue';
     const battleCards = targetGroup.cards;
@@ -235,8 +231,8 @@ export default function App() {
     setRedGraveyard([]);
 
     setDraggedCard(null);
-    setSelectedBattleCard(null);
-    setSelectedSupport(null);
+    setSelectedHandCard(null);
+    setSelectedSupportForTarget(null);
     setBattleStep(null);
     setInitialBattleInfo(null);
     setBattleResultInfo(null);
@@ -509,8 +505,8 @@ export default function App() {
   const redTotalPower = redGroups.reduce((sum, g) => sum + calculateGroupPower(g), 0);
 
   const handleStartPhase = (side: Side) => {
-    setSelectedBattleCard(null);
-    setSelectedSupport(null);
+    setSelectedHandCard(null);
+    setSelectedSupportForTarget(null);
     const isBlue = side === 'blue';
     const sideName = isBlue ? '青い地球' : '赤い地球';
     let currentDeck = isBlue ? [...blueDeck] : [...redDeck];
@@ -551,20 +547,20 @@ export default function App() {
       setBlueHand(remainingHand);
       setBlueSources((prev) => [...prev, ...newSources]);
       setActiveTurn('blue_main');
-      setNavMessage('【青い地球】メインフェイズです。カードをタップして召喚先を選ぶか、ドラッグして出せます。');
+      setNavMessage('【青い地球】メインフェイズです。手札をタップして召喚や発動、すてふだへの破棄ができます。');
     } else {
       setRedDeck(currentDeck);
       setRedHand(remainingHand);
       setRedSources((prev) => [...prev, ...newSources]);
       setActiveTurn('red_main');
-      setNavMessage('【赤い地球】メインフェイズです。カードをタップして召喚先を選ぶか、ドラッグして出せます。');
+      setNavMessage('【赤い地球】メインフェイズです。手札をタップして召喚や発動、すてふだへの破棄ができます。');
     }
   };
 
   const handleEndTurn = (side: Side) => {
     setDraggedCard(null);
-    setSelectedBattleCard(null);
-    setSelectedSupport(null);
+    setSelectedHandCard(null);
+    setSelectedSupportForTarget(null);
     const sideName = side === 'blue' ? '青い地球' : '赤い地球';
     addLog(`【${sideName}】メインフェイズを終了しました。`, 'system', side);
 
@@ -576,8 +572,8 @@ export default function App() {
   };
 
   const handleConfirmSwitch = () => {
-    setSelectedBattleCard(null);
-    setSelectedSupport(null);
+    setSelectedHandCard(null);
+    setSelectedSupportForTarget(null);
     if (shieldNextPlayer === 'red') {
       setActiveTurn('red_start');
       setNavMessage('【赤い地球】のターンです。「ドロー」を押してスタートフェイズを開始してください。');
@@ -739,7 +735,8 @@ export default function App() {
       setBlueDeck(context.oppDeck);
     }
 
-    setSelectedSupport(null);
+    setSelectedHandCard(null);
+    setSelectedSupportForTarget(null);
 
     if (activeTurn === 'battle') {
       setConsecutivePasses(0);
@@ -753,8 +750,7 @@ export default function App() {
     }
   };
 
-  const handleSupportCardClick = (card: SupportCard) => {
-    setSelectedBattleCard(null);
+  const triggerSupportActivation = (card: SupportCard) => {
     const isBlue = card.side === 'blue';
     const humanCount = isBlue ? blueHumanSources.length : redHumanSources.length;
 
@@ -766,28 +762,34 @@ export default function App() {
     if (card.target === 'none') {
       executeCardEffect(card);
     } else {
-      setSelectedSupport(card);
+      setSelectedSupportForTarget(card);
       const targetSideText = card.target === 'my_group' ? '味方' : '相手';
       setNavMessage(`「${card.name}」の対象とする【${targetSideText}のグループ】をタップしてください。`);
     }
   };
 
-  // 対戦カードのタップ選択（スマホ・タブレット向け）
-  const handleBattleCardClick = (card: BattleCard) => {
-    setSelectedSupport(null);
-    if (selectedBattleCard?.id === card.id) {
-      setSelectedBattleCard(null);
+  const handleHandCardClick = (card: AnyCard) => {
+    setSelectedSupportForTarget(null);
+
+    if (selectedHandCard?.id === card.id) {
+      setSelectedHandCard(null);
       setNavMessage('カードの選択を解除しました。');
       return;
     }
-    setSelectedBattleCard(card);
-    setNavMessage(`「${card.name}」を選択中：対戦ゾーンをタップで【新規召喚】、グループをタップで【連鎖】、すてふだタップで【破棄】できます。`);
+
+    setSelectedHandCard(card);
+
+    if (card.type === 'battle') {
+      setNavMessage(`「${card.name}」を選択中：対戦ゾーンタップで【召喚】、既存グループで【連鎖】、すてふだタップで【破棄】できます。`);
+    } else if (card.type === 'support') {
+      setNavMessage(`「${card.name}」を選択中：上の【⚡発動】か【破棄】、またはすてふだ置き場をタップしてください。`);
+    }
   };
 
   const startBattlePhase = () => {
     setActiveTurn('battle');
-    setSelectedBattleCard(null);
-    setSelectedSupport(null);
+    setSelectedHandCard(null);
+    setSelectedSupportForTarget(null);
     setConsecutivePasses(0);
 
     const firstSide: Side = blueTotalPower < redTotalPower ? 'blue' : redTotalPower < blueTotalPower ? 'red' : 'blue';
@@ -810,7 +812,8 @@ export default function App() {
   };
 
   const handlePassSupport = () => {
-    setSelectedSupport(null);
+    setSelectedHandCard(null);
+    setSelectedSupportForTarget(null);
     const currentPassSideName = supportTurnSide === 'blue' ? '青い地球' : '赤い地球';
     const newPassCount = consecutivePasses + 1;
 
@@ -1035,7 +1038,6 @@ export default function App() {
     }
   };
 
-  // 新規召喚の共通実行関数（ドラッグ＆タップ兼用）
   const executeSummonNewGroup = (battleCard: BattleCard, side: Side) => {
     const isBlue = side === 'blue';
     const availableSources = isBlue ? blueSeaSources : redCo2Sources;
@@ -1049,7 +1051,7 @@ export default function App() {
     if (availableSources.length < battleCard.requiredCost) {
       setNavMessage(`【みなもと不足】「${battleCard.name}」には${isBlue ? '海' : 'CO2'}のみなもとが ${battleCard.requiredCost} 枚必要です。`);
       setDraggedCard(null);
-      setSelectedBattleCard(null);
+      setSelectedHandCard(null);
       return;
     }
 
@@ -1079,12 +1081,11 @@ export default function App() {
 
     addLog(`【${isBlue ? '青' : '赤'}い地球】「${battleCard.name}」を新規召喚！（コスト: ${battleCard.requiredCost}, パワー: ${battleCard.power}）`, 'summon', side);
     setDraggedCard(null);
-    setSelectedBattleCard(null);
+    setSelectedHandCard(null);
 
     triggerOnPlayEffect(battleCard, newGroup, side, nextGroups, nextSources, nextHand);
   };
 
-  // 連鎖召喚の共通実行関数（ドラッグ＆タップ兼用）
   const executeChainGroup = (battleCard: BattleCard, side: Side, targetGroup: CardGroup) => {
     const isBlue = side === 'blue';
     const availableSources = isBlue ? blueSeaSources : redCo2Sources;
@@ -1098,7 +1099,7 @@ export default function App() {
     if (!canChainToGroup(targetGroup, battleCard, availableSources.length)) {
       setNavMessage('【連鎖不可】条件を満たしていないため連鎖できません。');
       setDraggedCard(null);
-      setSelectedBattleCard(null);
+      setSelectedHandCard(null);
       return;
     }
 
@@ -1128,12 +1129,11 @@ export default function App() {
 
     addLog(`【${isBlue ? '青' : '赤'}い地球】「${battleCard.name}」を連鎖召喚！（追加コスト: ${costDiff}, パワー: ${battleCard.power}）`, 'chain', side);
     setDraggedCard(null);
-    setSelectedBattleCard(null);
+    setSelectedHandCard(null);
 
     triggerOnPlayEffect(battleCard, updatedGroup, side, nextGroups, nextSources, nextHand);
   };
 
-  // 手札捨ての共通実行関数
   const executeDiscardCard = (card: AnyCard, side: Side) => {
     if (side === 'blue') {
       setBlueHand(blueHand.filter((c) => c.id !== card.id));
@@ -1144,10 +1144,9 @@ export default function App() {
     }
     addLog(`【${side === 'blue' ? '青' : '赤'}い地球】「${card.name}」を手札からすてふだ置き場に置きました。`, 'system', side);
     setDraggedCard(null);
-    setSelectedBattleCard(null);
+    setSelectedHandCard(null);
   };
 
-  // ドロップハンドラ（PCマウス用）
   const handleDropNewGroup = (e: React.DragEvent, side: Side) => {
     e.preventDefault();
     if (!draggedCard || draggedCard.side !== side || draggedCard.type !== 'battle') return;
@@ -1167,40 +1166,40 @@ export default function App() {
     executeDiscardCard(draggedCard, side);
   };
 
-  // タップハンドラ（スマホ・タブレット用）
   const handleZoneClick = (side: Side) => {
-    if (selectedBattleCard && selectedBattleCard.side === side) {
-      executeSummonNewGroup(selectedBattleCard, side);
+    if (selectedHandCard && selectedHandCard.side === side && selectedHandCard.type === 'battle') {
+      executeSummonNewGroup(selectedHandCard as BattleCard, side);
     }
   };
 
   const handleGroupTap = (group: CardGroup, groupOwnerSide: Side) => {
-    // 1. サポートカード発動の対象選択
-    if (selectedSupport) {
-      if (selectedSupport.target === 'my_group' && selectedSupport.side !== groupOwnerSide) {
+    if (selectedSupportForTarget) {
+      if (selectedSupportForTarget.target === 'my_group' && selectedSupportForTarget.side !== groupOwnerSide) {
         setNavMessage('【対象エラー】味方のグループを選択してください！');
         return;
       }
-      if (selectedSupport.target === 'opp_group' && selectedSupport.side === groupOwnerSide) {
+      if (selectedSupportForTarget.target === 'opp_group' && selectedSupportForTarget.side === groupOwnerSide) {
         setNavMessage('【対象エラー】相手のグループを選択してください！');
         return;
       }
-      executeCardEffect(selectedSupport, group);
+      executeCardEffect(selectedSupportForTarget, group);
       return;
     }
 
-    // 2. 対戦カードの連鎖召喚（タップ時）
-    if (selectedBattleCard && selectedBattleCard.side === groupOwnerSide) {
-      executeChainGroup(selectedBattleCard, groupOwnerSide, group);
+    if (selectedHandCard && selectedHandCard.side === groupOwnerSide && selectedHandCard.type === 'battle') {
+      executeChainGroup(selectedHandCard as BattleCard, groupOwnerSide, group);
     }
   };
 
   const handleGraveyardTap = (side: Side) => {
-    if (selectedBattleCard && selectedBattleCard.side === side) {
-      executeDiscardCard(selectedBattleCard, side);
-    } else {
-      setViewingGraveyardSide(side);
+    if (selectedHandCard && selectedHandCard.side === side) {
+      const isMainTurn = (side === 'blue' && activeTurn === 'blue_main') || (side === 'red' && activeTurn === 'red_main');
+      if (isMainTurn) {
+        executeDiscardCard(selectedHandCard, side);
+        return;
+      }
     }
+    setViewingGraveyardSide(side);
   };
 
   const handleToggleCardSelection = (card: AnyCard) => {
@@ -1235,23 +1234,8 @@ export default function App() {
   const isBlueDominant = blueTotalPower > redTotalPower && blueTotalPower > 0;
 
   return (
-    <div className="relative flex flex-col h-screen w-screen bg-slate-950 text-white font-sans overflow-hidden select-none p-1.5 sm:p-3 gap-1.5 sm:gap-2.5 text-xs">
+    <div className="relative flex flex-col h-screen w-screen bg-slate-950 text-white font-sans overflow-hidden select-none p-1.5 sm:p-2.5 gap-1 sm:gap-2 text-xs">
       
-      {/* スマホ縦画面時の「横画面推奨」トースト */}
-      {!dismissRotateTip && (
-        <div className="sm:hidden flex items-center justify-between bg-amber-950/90 border border-amber-500/80 px-2.5 py-1 rounded-lg text-[10px] text-amber-200 z-30 shadow-md">
-          <span className="flex items-center gap-1 font-bold">
-            🔄 スマホを【横向き】に回転させると快適に対戦できます！
-          </span>
-          <button
-            onClick={() => setDismissRotateTip(true)}
-            className="text-amber-400 font-black px-1.5 py-0.5 rounded hover:bg-amber-900/50"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
       {/* 相手グループ選択モーダル（磯焼け等の除去用） */}
       {groupSelectorConfig && (
         <div className="absolute inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-200">
@@ -1612,7 +1596,6 @@ export default function App() {
           <div className="flex-1 flex flex-col sm:flex-row gap-2 min-h-0">
             {/* 左側：カードプール */}
             <div className="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-3 flex flex-col min-w-0 shadow">
-              {/* フィルター・ソートバー */}
               <div className="flex flex-wrap gap-2 items-center mb-2 pb-2 border-b border-slate-800 text-[11px]">
                 <div className="flex items-center gap-1">
                   <span className="text-slate-400 font-bold">📦 パック:</span>
@@ -1721,7 +1704,6 @@ export default function App() {
                 </span>
               </div>
 
-              {/* デッキ警告の表示 */}
               {deckWarnings.length > 0 && (
                 <div className="mb-2 p-1.5 rounded bg-amber-950/80 border border-amber-500 text-[10px] text-amber-200 flex flex-col gap-0.5">
                   {deckWarnings.map((w, idx) => (
@@ -1743,14 +1725,12 @@ export default function App() {
                 ))}
               </div>
 
-              {/* 呪文メッセージの表示 */}
               {jumonMessage && (
                 <div className="my-1.5 text-center text-[10px] text-emerald-300 font-bold bg-emerald-950/90 py-1 rounded border border-emerald-600">
                   {jumonMessage}
                 </div>
               )}
 
-              {/* 呪文入力とボタン群 */}
               <div className="mt-2 pt-2 border-t border-slate-800 flex flex-col gap-1.5">
                 <div className="flex gap-1.5">
                   <input
@@ -1918,8 +1898,8 @@ export default function App() {
 
           {/* ナビゲーションバー */}
           <div className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 flex items-center justify-between shadow flex-shrink-0">
-            <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
-              <span className="text-emerald-400 font-extrabold text-xs flex-shrink-0">進行</span>
+            <div className="flex items-center gap-1.5 overflow-hidden flex-1 mr-2">
+              <span className="text-emerald-400 font-extrabold text-[11px] flex-shrink-0">進行</span>
               <span className="text-slate-200 font-medium text-[11px] truncate">➔ {navMessage}</span>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1947,13 +1927,13 @@ export default function App() {
           </div>
 
           {/* 赤い地球エリア（上段） */}
-          <div className={`flex-1 flex flex-col gap-1 p-1.5 rounded-xl border transition-all min-h-0 relative
+          <div className={`flex-1 flex flex-col gap-1 p-1 sm:p-1.5 rounded-xl border transition-all min-h-0 relative
             ${isRedTurn ? 'border-rose-500 bg-rose-950/10 shadow-lg' : 'border-slate-800 bg-slate-950/50 opacity-70'}
             ${damagedSide === 'red' ? 'animate-shake ring-4 ring-rose-500 bg-rose-950/40' : ''}
           `}>
             {/* 上段：手札・山札・すてふだ */}
-            <div className="h-20 sm:h-24 flex gap-1.5 flex-shrink-0">
-              <div className="w-14 sm:w-20 bg-slate-900 border border-slate-700 rounded-lg p-1 flex flex-col items-center justify-center flex-shrink-0">
+            <div className="h-24 sm:h-28 flex gap-1.5 flex-shrink-0">
+              <div className="w-14 sm:w-16 bg-slate-900 border border-slate-700 rounded-lg p-1 flex flex-col items-center justify-center flex-shrink-0">
                 <span className="font-bold text-slate-400 text-[9px]">山札</span>
                 <span className="text-sm sm:text-base font-black text-rose-400">{redDeck.length}</span>
               </div>
@@ -1961,25 +1941,26 @@ export default function App() {
               <div className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-1 flex flex-col justify-between min-w-0">
                 <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold">
                   <span>赤い地球の手札 ({redHand.length})</span>
-                  {isRedTurn && <span className="text-rose-400 text-[8px]">タップで選択・長押しで拡大</span>}
+                  {isRedTurn && <span className="text-rose-400 text-[8px]">タップで選択 / 長押しで拡大</span>}
                 </div>
                 <div className="flex gap-2 overflow-x-auto items-center h-full py-0.5">
                   {redHand.map((card, idx) => {
                     if (!isRedTurn) {
                       return (
-                        <div key={card.id || idx} className="w-11 sm:w-14 aspect-[63/88] rounded border border-rose-950 bg-gradient-to-br from-rose-950 via-slate-900 to-black shadow flex flex-col items-center justify-center flex-shrink-0 opacity-80">
+                        <div key={card.id || idx} className="w-12 sm:w-14 aspect-[63/88] rounded border border-rose-950 bg-gradient-to-br from-rose-950 via-slate-900 to-black shadow flex flex-col items-center justify-center flex-shrink-0 opacity-80">
                           <span className="text-[9px] font-black text-rose-500/60">赤</span>
                         </div>
                       );
                     }
 
+                    const isSelected = selectedHandCard?.id === card.id;
+
                     if (card.type === 'battle') {
-                      const isSelected = selectedBattleCard?.id === card.id;
                       return (
                         <div
                           key={card.id}
                           draggable={activeTurn === 'red_main'}
-                          onClick={() => activeTurn === 'red_main' && handleBattleCardClick(card as BattleCard)}
+                          onClick={() => activeTurn === 'red_main' && handleHandCardClick(card)}
                           onDragStart={() => {
                             handleCardPressEnd();
                             setDraggedCard(card);
@@ -1990,7 +1971,7 @@ export default function App() {
                           onMouseLeave={handleCardPressEnd}
                           onTouchStart={() => handleCardPressStart(card)}
                           onTouchEnd={handleCardPressEnd}
-                          className={`w-11 sm:w-14 aspect-[63/88] rounded border shadow cursor-pointer flex-shrink-0 transition-transform
+                          className={`w-12 sm:w-14 aspect-[63/88] rounded border shadow cursor-pointer flex-shrink-0 transition-transform
                             ${isSelected ? 'border-amber-400 ring-2 ring-amber-400 scale-105 shadow-amber-500/50' : 'border-rose-900'}
                             ${draggedCard?.id === card.id ? 'opacity-30 scale-95' : ''}
                           `}
@@ -2011,25 +1992,50 @@ export default function App() {
                         <div
                           key={supportCard.id}
                           draggable={activeTurn === 'red_main'}
+                          onClick={() => handleHandCardClick(supportCard)}
                           onDragStart={() => {
                             handleCardPressEnd();
                             setDraggedCard(supportCard);
                           }}
                           onDragEnd={() => setDraggedCard(null)}
-                          onClick={() => canActivate && handleSupportCardClick(supportCard)}
                           onMouseDown={() => handleCardPressStart(supportCard)}
                           onMouseUp={handleCardPressEnd}
                           onMouseLeave={handleCardPressEnd}
                           onTouchStart={() => handleCardPressStart(supportCard)}
                           onTouchEnd={handleCardPressEnd}
-                          className={`w-11 sm:w-14 aspect-[63/88] rounded border shadow flex-shrink-0 flex flex-col items-center justify-center p-0.5 text-center cursor-pointer transition-transform
-                            ${canActivate ? 'border-amber-400 bg-amber-950/60 ring-1 ring-amber-400' : 'border-slate-700 bg-slate-900 opacity-60'}
+                          className={`w-14 sm:w-16 aspect-[63/88] rounded border shadow flex-shrink-0 flex flex-col items-center justify-between p-1 text-center cursor-pointer transition-transform relative
+                            ${isSelected ? 'border-amber-400 ring-2 ring-amber-400 bg-amber-950/80 scale-105 z-20' : canActivate ? 'border-amber-500/80 bg-slate-900' : 'border-slate-800 bg-slate-950 opacity-60'}
                             ${draggedCard?.id === supportCard.id ? 'opacity-30 scale-95' : ''}
                           `}
                         >
-                          <span className="text-[7px] sm:text-[8px] font-black text-amber-300">サポート</span>
-                          <span className="text-[7px] sm:text-[8px] font-bold text-white line-clamp-2 mt-0.5">{supportCard.name}</span>
-                          <span className="text-[7px] text-amber-400 mt-0.5">人:{supportCard.requiredHumanSources}</span>
+                          <div className="w-full flex justify-between items-center text-[7px] text-amber-400 font-bold px-0.5">
+                            <span>人:{supportCard.requiredHumanSources}</span>
+                            <span className="text-[6px] bg-slate-800 px-1 rounded text-slate-300">{supportCard.timing === 'main' ? 'メイン' : 'バトル'}</span>
+                          </div>
+                          <span className="text-[8px] sm:text-[9px] font-bold text-white line-clamp-2">{supportCard.name}</span>
+
+                          {isSelected ? (
+                            <div className="flex gap-0.5 w-full mt-0.5" onClick={(e) => e.stopPropagation()}>
+                              {canActivate && (
+                                <button
+                                  onClick={() => triggerSupportActivation(supportCard)}
+                                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[7px] py-0.5 rounded shadow"
+                                >
+                                  発動
+                                </button>
+                              )}
+                              {activeTurn === 'red_main' && (
+                                <button
+                                  onClick={() => executeDiscardCard(supportCard, 'red')}
+                                  className="flex-1 bg-rose-700 hover:bg-rose-600 text-white font-black text-[7px] py-0.5 rounded shadow"
+                                >
+                                  破棄
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[7px] text-amber-300 font-bold">サポート</span>
+                          )}
                         </div>
                       );
                     }
@@ -2043,11 +2049,13 @@ export default function App() {
                 onClick={() => handleGraveyardTap('red')}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => handleDropGraveyard(e, 'red')}
-                className={`w-14 sm:w-20 border rounded-lg p-1 flex flex-col items-center justify-center transition cursor-pointer flex-shrink-0
-                  ${selectedBattleCard?.side === 'red' ? 'border-rose-400 ring-2 ring-rose-400 bg-rose-950/60' : 'border-slate-700 bg-slate-900 hover:border-rose-400'}
+                className={`w-14 sm:w-16 border rounded-lg p-1 flex flex-col items-center justify-center transition cursor-pointer flex-shrink-0
+                  ${selectedHandCard?.side === 'red' ? 'border-rose-400 ring-2 ring-rose-400 bg-rose-950/80 animate-pulse' : 'border-slate-700 bg-slate-900 hover:border-rose-400'}
                 `}
               >
-                <span className="font-bold text-slate-400 text-[9px]">{selectedBattleCard?.side === 'red' ? '捨てる' : 'すてふだ'}</span>
+                <span className={`font-bold text-[9px] ${selectedHandCard?.side === 'red' ? 'text-rose-300 font-black' : 'text-slate-400'}`}>
+                  {selectedHandCard?.side === 'red' ? 'ここへ捨てる' : 'すてふだ'}
+                </span>
                 <span className="text-xs sm:text-sm font-bold text-slate-300">{redGraveyard.length}</span>
               </div>
             </div>
@@ -2059,12 +2067,11 @@ export default function App() {
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => handleDropNewGroup(e, 'red')}
                 className={`flex-1 rounded-lg p-1.5 flex flex-col border transition-all relative overflow-hidden cursor-pointer ${
-                  (draggedCard?.side === 'red' && draggedCard?.type === 'battle') || (selectedBattleCard?.side === 'red')
+                  (draggedCard?.side === 'red' && draggedCard?.type === 'battle') || (selectedHandCard?.side === 'red' && selectedHandCard?.type === 'battle')
                     ? 'border-rose-400 border-dashed bg-rose-950/40 ring-1 ring-rose-400'
                     : 'border-slate-800 bg-slate-900/60'
-                } ${isRedDominant ? 'shadow-[inset_0_0_20px_rgba(244,63,94,0.3)]' : ''}`}
+                }`}
               >
-                {/* 優勢火の粉パーティクル演出 */}
                 {isRedDominant && (
                   <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
                     {[...Array(10)].map((_, i) => (
@@ -2087,7 +2094,9 @@ export default function App() {
                   <span className="flex items-center gap-1">
                     <span>【赤】対戦ゾーン</span>
                     {isRedDominant && <span className="text-[9px] px-1 bg-rose-900/80 text-rose-300 rounded font-black border border-rose-600 animate-pulse">🔥優勢</span>}
-                    {selectedBattleCard?.side === 'red' && <span className="text-[9px] px-1 bg-amber-500 text-black rounded font-black">タップで召喚</span>}
+                    {selectedHandCard?.side === 'red' && selectedHandCard?.type === 'battle' && (
+                      <span className="text-[9px] px-1 bg-amber-500 text-black rounded font-black animate-pulse">タップで召喚</span>
+                    )}
                   </span>
                   <span>総攻撃力: <span className="text-xs sm:text-sm font-black text-rose-400">{redTotalPower}</span></span>
                 </div>
@@ -2095,15 +2104,18 @@ export default function App() {
                 <div className="flex-1 flex items-center justify-center gap-3 overflow-x-auto z-10 py-1">
                   {redGroups.length === 0 ? (
                     <span className="text-slate-600 text-[10px]">
-                      {selectedBattleCard?.side === 'red' ? 'ここをタップして新規召喚' : '対戦カードなし'}
+                      {selectedHandCard?.side === 'red' && selectedHandCard?.type === 'battle' ? 'ここをタップして新規召喚' : '対戦カードなし'}
                     </span>
                   ) : redGroups.map((group, idx) => {
                     const power = calculateGroupPower(group);
-                    const activeCard = draggedCard || selectedBattleCard;
-                    const isChainable = activeCard?.side === 'red' && activeCard?.type === 'battle' && canChainToGroup(group, activeCard as BattleCard, redCo2Sources.length);
-                    const isSupportTarget = selectedSupport && (
-                      (selectedSupport.target === 'my_group' && selectedSupport.side === 'red') ||
-                      (selectedSupport.target === 'opp_group' && selectedSupport.side === 'blue')
+                    // ★ 型絞り込み修正: AnyCard を BattleCard に安全に変換して渡す
+                    const candidate = draggedCard || selectedHandCard;
+                    const activeBattleCard = candidate?.type === 'battle' ? (candidate as BattleCard) : null;
+                    const isChainable = activeBattleCard?.side === 'red' && canChainToGroup(group, activeBattleCard, redCo2Sources.length);
+
+                    const isSupportTarget = selectedSupportForTarget && (
+                      (selectedSupportForTarget.target === 'my_group' && selectedSupportForTarget.side === 'red') ||
+                      (selectedSupportForTarget.target === 'opp_group' && selectedSupportForTarget.side === 'blue')
                     );
                     const isNewSummon = recentSummonGroupId === group.groupId;
                     const isRecentChain = recentChainGroupId === group.groupId;
@@ -2118,7 +2130,7 @@ export default function App() {
                         }}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => handleDropChain(e, 'red', group)}
-                        className={`flex flex-col items-center p-1.5 rounded-lg border transition-all cursor-pointer bg-slate-950 relative flex-shrink-0
+                        className={`flex flex-col items-center p-1 rounded-lg border transition-all cursor-pointer bg-slate-950 relative flex-shrink-0
                           ${isChainable ? 'border-yellow-400 ring-2 ring-yellow-400 scale-102 bg-yellow-950/30' : ''}
                           ${isSupportTarget ? 'border-emerald-400 ring-2 ring-emerald-400 animate-pulse' : 'border-rose-900'}
                           ${isNewSummon ? 'animate-summon' : ''}
@@ -2160,18 +2172,18 @@ export default function App() {
                 </div>
               </div>
 
-              <div className={`w-24 sm:w-32 bg-slate-900 border border-slate-700 rounded-lg p-1.5 flex flex-col justify-between flex-shrink-0 transition-all ${
+              <div className={`w-20 sm:w-28 bg-slate-900 border border-slate-700 rounded-lg p-1 flex flex-col justify-between flex-shrink-0 transition-all ${
                 chargedSourceSide === 'red' ? 'animate-source-charge border-rose-500 bg-rose-950/30' : ''
               }`}>
-                <span className="text-center font-bold text-slate-400 text-[9px]">赤のみなもと</span>
+                <span className="text-center font-bold text-slate-400 text-[9px]">赤みなもと</span>
                 <div className="flex gap-1 flex-1 items-center justify-center my-0.5">
                   <div className="flex-1 flex flex-col items-center bg-rose-950/50 border border-rose-600 rounded p-0.5">
                     <span className="text-[9px] text-rose-300 font-bold">CO2</span>
-                    <span className="text-sm sm:text-base font-black text-rose-200">{redCo2Sources.length}</span>
+                    <span className="text-sm font-black text-rose-200">{redCo2Sources.length}</span>
                   </div>
                   <div className="flex-1 flex flex-col items-center bg-amber-950/50 border border-amber-600 rounded p-0.5">
                     <span className="text-[9px] text-amber-300 font-bold">人</span>
-                    <span className="text-sm sm:text-base font-black text-amber-200">{redHumanSources.length}</span>
+                    <span className="text-sm font-black text-amber-200">{redHumanSources.length}</span>
                   </div>
                 </div>
               </div>
@@ -2197,7 +2209,7 @@ export default function App() {
           </div>
 
           {/* 青い地球エリア（下段） */}
-          <div className={`flex-1 flex flex-col gap-1 p-1.5 rounded-xl border transition-all min-h-0 relative
+          <div className={`flex-1 flex flex-col gap-1 p-1 sm:p-1.5 rounded-xl border transition-all min-h-0 relative
             ${isBlueTurn ? 'border-sky-500 bg-sky-950/10 shadow-lg' : 'border-slate-800 bg-slate-950/50 opacity-70'}
             ${damagedSide === 'blue' ? 'animate-shake ring-4 ring-sky-500 bg-sky-950/40' : ''}
           `}>
@@ -2208,12 +2220,11 @@ export default function App() {
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => handleDropNewGroup(e, 'blue')}
                 className={`flex-1 rounded-lg p-1.5 flex flex-col border transition-all relative overflow-hidden cursor-pointer ${
-                  (draggedCard?.side === 'blue' && draggedCard?.type === 'battle') || (selectedBattleCard?.side === 'blue')
+                  (draggedCard?.side === 'blue' && draggedCard?.type === 'battle') || (selectedHandCard?.side === 'blue' && selectedHandCard?.type === 'battle')
                     ? 'border-sky-400 border-dashed bg-sky-950/40 ring-1 ring-sky-400'
                     : 'border-slate-800 bg-slate-900/60'
-                } ${isBlueDominant ? 'shadow-[inset_0_0_20px_rgba(14,165,233,0.3)]' : ''}`}
+                }`}
               >
-                {/* 優勢木の葉パーティクル演出 */}
                 {isBlueDominant && (
                   <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
                     {[...Array(10)].map((_, i) => (
@@ -2234,7 +2245,9 @@ export default function App() {
                   <span className="flex items-center gap-1">
                     <span>【青】対戦ゾーン</span>
                     {isBlueDominant && <span className="text-[9px] px-1 bg-emerald-900/80 text-emerald-300 rounded font-black border border-emerald-500 animate-pulse">🌿優勢</span>}
-                    {selectedBattleCard?.side === 'blue' && <span className="text-[9px] px-1 bg-amber-500 text-black rounded font-black">タップで召喚</span>}
+                    {selectedHandCard?.side === 'blue' && selectedHandCard?.type === 'battle' && (
+                      <span className="text-[9px] px-1 bg-amber-500 text-black rounded font-black animate-pulse">タップで召喚</span>
+                    )}
                   </span>
                   <span>総攻撃力: <span className="text-xs sm:text-sm font-black text-sky-400">{blueTotalPower}</span></span>
                 </div>
@@ -2242,15 +2255,18 @@ export default function App() {
                 <div className="flex-1 flex items-center justify-center gap-3 overflow-x-auto z-10 py-1">
                   {blueGroups.length === 0 ? (
                     <span className="text-slate-600 text-[10px]">
-                      {selectedBattleCard?.side === 'blue' ? 'ここをタップして新規召喚' : '対戦カードなし'}
+                      {selectedHandCard?.side === 'blue' && selectedHandCard?.type === 'battle' ? 'ここをタップして新規召喚' : '対戦カードなし'}
                     </span>
                   ) : blueGroups.map((group, idx) => {
                     const power = calculateGroupPower(group);
-                    const activeCard = draggedCard || selectedBattleCard;
-                    const isChainable = activeCard?.side === 'blue' && activeCard?.type === 'battle' && canChainToGroup(group, activeCard as BattleCard, blueSeaSources.length);
-                    const isSupportTarget = selectedSupport && (
-                      (selectedSupport.target === 'my_group' && selectedSupport.side === 'blue') ||
-                      (selectedSupport.target === 'opp_group' && selectedSupport.side === 'red')
+                    // ★ 型絞り込み修正: AnyCard を BattleCard に安全に変換して渡す
+                    const candidate = draggedCard || selectedHandCard;
+                    const activeBattleCard = candidate?.type === 'battle' ? (candidate as BattleCard) : null;
+                    const isChainable = activeBattleCard?.side === 'blue' && canChainToGroup(group, activeBattleCard, blueSeaSources.length);
+
+                    const isSupportTarget = selectedSupportForTarget && (
+                      (selectedSupportForTarget.target === 'my_group' && selectedSupportForTarget.side === 'blue') ||
+                      (selectedSupportForTarget.target === 'opp_group' && selectedSupportForTarget.side === 'red')
                     );
                     const isNewSummon = recentSummonGroupId === group.groupId;
                     const isRecentChain = recentChainGroupId === group.groupId;
@@ -2265,7 +2281,7 @@ export default function App() {
                         }}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => handleDropChain(e, 'blue', group)}
-                        className={`flex flex-col items-center p-1.5 rounded-lg border transition-all cursor-pointer bg-slate-950 relative flex-shrink-0
+                        className={`flex flex-col items-center p-1 rounded-lg border transition-all cursor-pointer bg-slate-950 relative flex-shrink-0
                           ${isChainable ? 'border-yellow-400 ring-2 ring-yellow-400 scale-102 bg-yellow-950/30' : ''}
                           ${isSupportTarget ? 'border-emerald-400 ring-2 ring-emerald-400 animate-pulse' : 'border-sky-900'}
                           ${isNewSummon ? 'animate-summon' : ''}
@@ -2307,18 +2323,18 @@ export default function App() {
                 </div>
               </div>
 
-              <div className={`w-24 sm:w-32 bg-slate-900 border border-slate-700 rounded-lg p-1.5 flex flex-col justify-between flex-shrink-0 transition-all ${
+              <div className={`w-20 sm:w-28 bg-slate-900 border border-slate-700 rounded-lg p-1 flex flex-col justify-between flex-shrink-0 transition-all ${
                 chargedSourceSide === 'blue' ? 'animate-source-charge border-sky-400 bg-sky-950/30' : ''
               }`}>
-                <span className="text-center font-bold text-slate-400 text-[9px]">青のみなもと</span>
+                <span className="text-center font-bold text-slate-400 text-[9px]">青みなもと</span>
                 <div className="flex gap-1 flex-1 items-center justify-center my-0.5">
                   <div className="flex-1 flex flex-col items-center bg-sky-950/50 border border-sky-600 rounded p-0.5">
                     <span className="text-[9px] text-sky-300 font-bold">海</span>
-                    <span className="text-sm sm:text-base font-black text-sky-200">{blueSeaSources.length}</span>
+                    <span className="text-sm font-black text-sky-200">{blueSeaSources.length}</span>
                   </div>
                   <div className="flex-1 flex flex-col items-center bg-amber-950/50 border border-amber-600 rounded p-0.5">
                     <span className="text-[9px] text-amber-300 font-bold">人</span>
-                    <span className="text-sm sm:text-base font-black text-amber-200">{blueHumanSources.length}</span>
+                    <span className="text-sm font-black text-amber-200">{blueHumanSources.length}</span>
                   </div>
                 </div>
               </div>
@@ -2343,41 +2359,44 @@ export default function App() {
             </div>
 
             {/* 下段：手札・山札・すてふだ */}
-            <div className="h-20 sm:h-24 flex gap-1.5 flex-shrink-0">
+            <div className="h-24 sm:h-28 flex gap-1.5 flex-shrink-0">
               <div
                 onClick={() => handleGraveyardTap('blue')}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => handleDropGraveyard(e, 'blue')}
-                className={`w-14 sm:w-20 border rounded-lg p-1 flex flex-col items-center justify-center transition cursor-pointer flex-shrink-0
-                  ${selectedBattleCard?.side === 'blue' ? 'border-sky-400 ring-2 ring-sky-400 bg-sky-950/60' : 'border-slate-700 bg-slate-900 hover:border-sky-400'}
+                className={`w-14 sm:w-16 border rounded-lg p-1 flex flex-col items-center justify-center transition cursor-pointer flex-shrink-0
+                  ${selectedHandCard?.side === 'blue' ? 'border-sky-400 ring-2 ring-sky-400 bg-sky-950/80 animate-pulse' : 'border-slate-700 bg-slate-900 hover:border-sky-400'}
                 `}
               >
-                <span className="font-bold text-slate-400 text-[9px]">{selectedBattleCard?.side === 'blue' ? '捨てる' : 'すてふだ'}</span>
+                <span className={`font-bold text-[9px] ${selectedHandCard?.side === 'blue' ? 'text-sky-300 font-black' : 'text-slate-400'}`}>
+                  {selectedHandCard?.side === 'blue' ? 'ここへ捨てる' : 'すてふだ'}
+                </span>
                 <span className="text-xs sm:text-sm font-bold text-slate-300">{blueGraveyard.length}</span>
               </div>
 
               <div className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-1 flex flex-col justify-between min-w-0">
                 <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold">
                   <span>青い地球の手札 ({blueHand.length})</span>
-                  {isBlueTurn && <span className="text-emerald-400 text-[8px]">タップで選択・長押しで拡大</span>}
+                  {isBlueTurn && <span className="text-emerald-400 text-[8px]">タップで選択 / 長押しで拡大</span>}
                 </div>
                 <div className="flex gap-2 overflow-x-auto items-center h-full py-0.5">
                   {blueHand.map((card, idx) => {
                     if (!isBlueTurn) {
                       return (
-                        <div key={card.id || idx} className="w-11 sm:w-14 aspect-[63/88] rounded border border-sky-950 bg-gradient-to-br from-sky-950 via-slate-900 to-black shadow flex flex-col items-center justify-center flex-shrink-0 opacity-80">
+                        <div key={card.id || idx} className="w-12 sm:w-14 aspect-[63/88] rounded border border-sky-950 bg-gradient-to-br from-sky-950 via-slate-900 to-black shadow flex flex-col items-center justify-center flex-shrink-0 opacity-80">
                           <span className="text-[9px] font-black text-sky-500/60">青</span>
                         </div>
                       );
                     }
 
+                    const isSelected = selectedHandCard?.id === card.id;
+
                     if (card.type === 'battle') {
-                      const isSelected = selectedBattleCard?.id === card.id;
                       return (
                         <div
                           key={card.id}
                           draggable={activeTurn === 'blue_main'}
-                          onClick={() => activeTurn === 'blue_main' && handleBattleCardClick(card as BattleCard)}
+                          onClick={() => activeTurn === 'blue_main' && handleHandCardClick(card)}
                           onDragStart={() => {
                             handleCardPressEnd();
                             setDraggedCard(card);
@@ -2388,7 +2407,7 @@ export default function App() {
                           onMouseLeave={handleCardPressEnd}
                           onTouchStart={() => handleCardPressStart(card)}
                           onTouchEnd={handleCardPressEnd}
-                          className={`w-11 sm:w-14 aspect-[63/88] rounded border shadow cursor-pointer flex-shrink-0 transition-transform
+                          className={`w-12 sm:w-14 aspect-[63/88] rounded border shadow cursor-pointer flex-shrink-0 transition-transform
                             ${isSelected ? 'border-amber-400 ring-2 ring-amber-400 scale-105 shadow-amber-500/50' : 'border-slate-600'}
                             ${draggedCard?.id === card.id ? 'opacity-30 scale-95' : ''}
                           `}
@@ -2409,25 +2428,50 @@ export default function App() {
                         <div
                           key={supportCard.id}
                           draggable={activeTurn === 'blue_main'}
+                          onClick={() => handleHandCardClick(supportCard)}
                           onDragStart={() => {
                             handleCardPressEnd();
                             setDraggedCard(supportCard);
                           }}
                           onDragEnd={() => setDraggedCard(null)}
-                          onClick={() => canActivate && handleSupportCardClick(supportCard)}
                           onMouseDown={() => handleCardPressStart(supportCard)}
                           onMouseUp={handleCardPressEnd}
                           onMouseLeave={handleCardPressEnd}
                           onTouchStart={() => handleCardPressStart(supportCard)}
                           onTouchEnd={handleCardPressEnd}
-                          className={`w-11 sm:w-14 aspect-[63/88] rounded border shadow flex-shrink-0 flex flex-col items-center justify-center p-0.5 text-center cursor-pointer transition-transform
-                            ${canActivate ? 'border-amber-400 bg-amber-950/60 ring-1 ring-amber-400' : 'border-slate-700 bg-slate-900 opacity-60'}
+                          className={`w-14 sm:w-16 aspect-[63/88] rounded border shadow flex-shrink-0 flex flex-col items-center justify-between p-1 text-center cursor-pointer transition-transform relative
+                            ${isSelected ? 'border-amber-400 ring-2 ring-amber-400 bg-amber-950/80 scale-105 z-20' : canActivate ? 'border-amber-500/80 bg-slate-900' : 'border-slate-800 bg-slate-950 opacity-60'}
                             ${draggedCard?.id === supportCard.id ? 'opacity-30 scale-95' : ''}
                           `}
                         >
-                          <span className="text-[7px] sm:text-[8px] font-black text-amber-300">サポート</span>
-                          <span className="text-[7px] sm:text-[8px] font-bold text-white line-clamp-2 mt-0.5">{supportCard.name}</span>
-                          <span className="text-[7px] text-amber-400 mt-0.5">人:{supportCard.requiredHumanSources}</span>
+                          <div className="w-full flex justify-between items-center text-[7px] text-amber-400 font-bold px-0.5">
+                            <span>人:{supportCard.requiredHumanSources}</span>
+                            <span className="text-[6px] bg-slate-800 px-1 rounded text-slate-300">{supportCard.timing === 'main' ? 'メイン' : 'バトル'}</span>
+                          </div>
+                          <span className="text-[8px] sm:text-[9px] font-bold text-white line-clamp-2">{supportCard.name}</span>
+
+                          {isSelected ? (
+                            <div className="flex gap-0.5 w-full mt-0.5" onClick={(e) => e.stopPropagation()}>
+                              {canActivate && (
+                                <button
+                                  onClick={() => triggerSupportActivation(supportCard)}
+                                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[7px] py-0.5 rounded shadow"
+                                >
+                                  発動
+                                </button>
+                              )}
+                              {activeTurn === 'blue_main' && (
+                                <button
+                                  onClick={() => executeDiscardCard(supportCard, 'blue')}
+                                  className="flex-1 bg-rose-700 hover:bg-rose-600 text-white font-black text-[7px] py-0.5 rounded shadow"
+                                >
+                                  破棄
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[7px] text-amber-300 font-bold">サポート</span>
+                          )}
                         </div>
                       );
                     }
@@ -2437,7 +2481,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="w-14 sm:w-20 bg-slate-900 border border-slate-700 rounded-lg p-1 flex flex-col items-center justify-center flex-shrink-0">
+              <div className="w-14 sm:w-16 bg-slate-900 border border-slate-700 rounded-lg p-1 flex flex-col items-center justify-center flex-shrink-0">
                 <span className="font-bold text-slate-400 text-[9px]">山札</span>
                 <span className="text-sm sm:text-base font-black text-sky-400">{blueDeck.length}</span>
               </div>
