@@ -1,0 +1,116 @@
+@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========================================================= */
+/* 視覚演出用カスタムアニメーション                           */
+/* ========================================================= */
+
+/* 1. 被ダメージ時のシェイク（画面全体の激しい揺れ） */
+@keyframes screen-shake {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  10%, 30%, 50%, 70%, 90% { transform: translate(-5px, 2px) rotate(-0.5deg); }
+  20%, 40%, 60%, 80% { transform: translate(5px, -2px) rotate(0.5deg); }
+}
+.animate-shake {
+  animation: screen-shake 0.55s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* 2. 新規召喚時のポップイン出現 */
+@keyframes summon-pop {
+  0% { transform: scale(0.3) translateY(20px); opacity: 0; filter: brightness(2); }
+  60% { transform: scale(1.1) translateY(-4px); opacity: 1; filter: brightness(1.5); }
+  100% { transform: scale(1) translateY(0); opacity: 1; filter: brightness(1); }
+}
+.animate-summon {
+  animation: summon-pop 0.4s ease-out forwards;
+}
+
+/* 3. 連鎖成功時のゴールド衝撃波リング */
+@keyframes chain-glow {
+  0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.9), 0 0 25px rgba(250, 204, 21, 0.8); }
+  50% { box-shadow: 0 0 0 14px rgba(250, 204, 21, 0.4), 0 0 45px rgba(250, 204, 21, 0.9); }
+  100% { box-shadow: 0 0 0 24px rgba(250, 204, 21, 0), 0 0 10px rgba(250, 204, 21, 0); }
+}
+.animate-chain-flash {
+  animation: chain-glow 0.85s ease-out forwards;
+}
+
+/* 4. サポート効果発動時のターゲット発光フラッシュ */
+@keyframes support-target-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.9); filter: brightness(1.8); }
+  50% { box-shadow: 0 0 30px 10px rgba(52, 211, 153, 0.7); filter: brightness(1.4); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); filter: brightness(1); }
+}
+.animate-support-target {
+  animation: support-target-pulse 0.9s ease-out forwards;
+}
+
+/* 5. みなもとチャージ時のフラッシュ */
+@keyframes source-charged {
+  0% { transform: scale(1); filter: brightness(1); }
+  40% { transform: scale(1.15); filter: brightness(2); box-shadow: 0 0 25px rgba(56, 189, 248, 0.9); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.animate-source-charge {
+  animation: source-charged 0.65s ease-out forwards;
+}
+
+/* 6. カードホバー時のグロー & リフトアップ */
+.card-hover-blue {
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.card-hover-blue:hover {
+  transform: translateY(-8px) scale(1.04);
+  box-shadow: 0 12px 24px -6px rgba(14, 165, 233, 0.5), 0 0 18px 2px rgba(56, 189, 248, 0.6);
+  border-color: #38bdf8;
+  z-index: 20;
+}
+
+.card-hover-red {
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.card-hover-red:hover {
+  transform: translateY(-8px) scale(1.04);
+  box-shadow: 0 12px 24px -6px rgba(244, 63, 94, 0.5), 0 0 18px 2px rgba(251, 113, 133, 0.6);
+  border-color: #fb7185;
+  z-index: 20;
+}
+
+/* 7. 赤い地球：火の粉（Ember）エフェクト */
+@keyframes ember-rise {
+  0% { transform: translateY(100%) scale(0.6) rotate(0deg); opacity: 0; }
+  25% { opacity: 0.9; }
+  75% { opacity: 0.7; }
+  100% { transform: translateY(-120%) scale(1.2) rotate(180deg); opacity: 0; }
+}
+.ember-particle {
+  position: absolute;
+  bottom: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, #f97316 0%, #ef4444 60%, rgba(220, 38, 38, 0) 100%);
+  filter: blur(1px);
+  animation: ember-rise linear infinite;
+}
+
+/* 8. 青い地球：舞い散る木の葉（Leaf）エフェクト */
+@keyframes leaf-fall-sway {
+  0% { transform: translate(-10%, -20%) rotate(0deg) scale(0.7); opacity: 0; }
+  20% { opacity: 0.85; }
+  50% { transform: translate(40%, 50%) rotate(120deg) scale(0.9); }
+  80% { opacity: 0.75; }
+  100% { transform: translate(110%, 120%) rotate(260deg) scale(0.8); opacity: 0; }
+}
+.leaf-particle {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+  width: 14px;
+  height: 9px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-radius: 12px 0 12px 0;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  animation: leaf-fall-sway linear infinite;
+}
